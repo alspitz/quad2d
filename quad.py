@@ -23,8 +23,12 @@ class Quad2DModel:
     tdd = u.tau / self.I
 
     if self.add_more:
+      xdd -= 1.1 * x.x
       xdd -= 8.1 * x.x_vel
-      #xdd += 3.1 * x.x_vel ** 2
+      xdd -= 3.1 * x.x_vel ** 2
+      xdd -= 0.8 * x.x ** 2
+
+      zdd -= 10.5 * x.z_vel
 
       #xdd += 4 * x.theta
       #tdd -= x.theta_vel

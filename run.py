@@ -14,7 +14,7 @@ def get_poly(x, v=0, a=0, j=0):
                        (0, 1, 2, 3, 4, 5, 6, 7),
                        (0, 0, 2, 6, 12, 20, 30, 42),
                        (0, 0, 0, 6, 24, 60, 120, 210)))
-  poly_b = np.array((x, v, a, j, 0, 0, 0, 0))
+  poly_b = np.array((x, v, a, j, 1, 0, 0, 0))
   return np.flip(np.linalg.solve(poly_mat, poly_b), axis=0)
 
 def plot(ts, data, ind, y_label=None, title=None, label="", ylim=None, symbol='-'):
@@ -43,13 +43,13 @@ def error(x1, x2):
 if __name__ == "__main__":
   import matplotlib.pyplot as pyplot
 
-  trials = 5
+  trials = 4
 
   m = 1.4
   g = 10.18
   I = 0.123
 
-  x_start = 1
+  x_start = 0
   x_vel_start = 0
 
   quad = Quad2DModel(m, g, I, add_more=True)
@@ -59,9 +59,9 @@ if __name__ == "__main__":
   learner = LinearLearner(1, control_model, dt)
 
   x_poly = get_poly(x_start, x_vel_start)
-  #z_poly = x_poly
+  z_poly = x_poly
   #z_poly = [1, 1, -12, 0, 0]
-  z_poly = [0, 0, 0, 0, 0]
+  #z_poly = [0, 0, 0, 0, 0]
 
   controller = FlatController(control_model, x_poly, z_poly, learner)
   closed_loop = lambda t, x: quad.deriv(x, controller.get_u(x, t))
@@ -112,7 +112,7 @@ if __name__ == "__main__":
 
     run_s = "Run %d" % trial
     plot(ts, x_vals, 0, "$x$ (m)", "$x$ vs. time", run_s)
-    plot(ts, v_vals, 1, "$v$ (m/s)", "$v$ vs. time", run_s)
+    plot(ts, v_vals, 1, "$v$ (m/s)", "$\dot x$ vs. time", run_s)
     plot(ts, z_vals, 2, "$z$ (m)", "$z$ vs. time", run_s)
     plot(ts, theta_vals, 3, "$\\theta$ (rad)", "$\\theta$ vs. time", run_s)
     plot(ts, theta_vel_vals, 4, "$\\omega$ (rad/s)", "$\\omega$ vs. time", run_s)

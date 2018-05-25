@@ -56,8 +56,11 @@ class LinearLearner:
     #self.w[3, 3] = 4 * self.dt
 
     #self.w = np.zeros((9, 2))
+    #self.w[1, 0] = -1.1 * self.dt
     #self.w[3, 0] = -8.1 * self.dt
-    #self.w[7, 0] = 3.1 * self.dt
+    #self.w[4, 1] = -10.5 * self.dt
+    #self.w[5, 0] = -0.8 * self.dt
+    #self.w[7, 0] = -3.1 * self.dt
 
     print("Fit is", np.linalg.norm(xs.dot(self.w) - ys) / xs.shape[0])
 

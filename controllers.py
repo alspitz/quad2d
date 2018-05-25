@@ -67,7 +67,7 @@ class FlatController:
     j_des = np.array((x_des[3], z_des[3])) # Jerk
     s_des = np.array((x_des[4], z_des[4])) # Snap
 
-    # TODO We omit angle and angel vel here because the learner doesn't use them... yet.
+    # TODO We omit angle and angle vel here because the learner doesn't use them... yet.
     nom_state = np.array((x_des[0], z_des[0], 0, x_des[1], z_des[1], 0))
 
     err = self.learner.predict(nom_state) / self.learner.dt
@@ -79,7 +79,7 @@ class FlatController:
     dfdx_vel2 = self.learner.get_dderiv_x_vel_x_vel(nom_state) / self.learner.dt
 
     dfdt = dfdx.dot(v_des) + dfdx_vel.dot(a_des)
-    d2fdt2 = dfdx2.dot(v_des).dot(v_des) + dfdx.dot(v_des) + dfdx_vel2.dot(a_des).dot(a_des) + dfdx_vel.dot(j_des)
+    d2fdt2 = dfdx2.dot(v_des).dot(v_des) + dfdx.dot(a_des) + dfdx_vel2.dot(a_des).dot(a_des) + dfdx_vel.dot(j_des)
 
     acc_vec = a_des + np.array((0, self.model.g)) - err
     z_body = acc_vec / np.linalg.norm(acc_vec)
