@@ -31,8 +31,8 @@ def plot(ts, data, ind, y_label=None, title=None, label="", ylim=None, symbol='-
 
   pyplot.legend()
 
-def plot_des(ts, data, ind):
-  return plot(ts, data, ind, label="Desired", symbol='--')
+def plot_des(ts, data, ind, label="Desired"):
+  return plot(ts, data, ind, label=label, symbol='--')
 
 def noisy(x):
   return x + np.random.normal(0, 1e-2, size=(6,))
@@ -73,14 +73,6 @@ if __name__ == "__main__":
   z_start = z_des[0, 0]
   z_vel_start = z_des[1, 0]
 
-  theta_desires = []
-  theta_vel_desires = []
-
-  for i in range(x_des.shape[1]):
-    a_norm, theta_des, theta_vel_des, theta_acc_des = controller.get_des_data(x_des[:, i], z_des[:, i])
-    theta_desires.append(theta_des)
-    theta_vel_desires.append(theta_vel_des)
-
   for trial in range(trials):
     ts = [0]
     xs = [np.array((x_start, z_start, 0, x_vel_start, z_vel_start, 0))]
@@ -88,6 +80,14 @@ if __name__ == "__main__":
     r = scipy.integrate.ode(closed_loop)
     r.set_initial_value(xs[0], ts[0])
     #r.set_integrator('dopri5', nsteps=1e9)
+
+    theta_desires = []
+    theta_vel_desires = []
+
+    for i in range(x_des.shape[1]):
+      a_norm, theta_des, theta_vel_des, theta_acc_des = controller.get_des_data(x_des[:, i], z_des[:, i])
+      theta_desires.append(theta_des)
+      theta_vel_desires.append(theta_vel_des)
 
     while r.successful() and r.t < t_end:
       t_now = r.t + dt
@@ -116,6 +116,8 @@ if __name__ == "__main__":
     plot(ts, z_vals, 2, "$z$ (m)", "$z$ vs. time", run_s)
     plot(ts, theta_vals, 3, "$\\theta$ (rad)", "$\\theta$ vs. time", run_s)
     plot(ts, theta_vel_vals, 4, "$\\omega$ (rad/s)", "$\\omega$ vs. time", run_s)
+    plot_des(ts, theta_desires, 3, "Desired %d" % trial)
+    plot_des(ts, theta_vel_desires, 4, "Desired %d" % trial)
 
     print("Run %d:" % trial)
     print("x error is %1.2e" % error(x_vals, x_des[0]))
@@ -127,7 +129,7 @@ if __name__ == "__main__":
   plot_des(ts, x_des[0], 0)
   plot_des(ts, x_des[1], 1)
   plot_des(ts, z_des[0], 2)
-  plot_des(ts, theta_desires, 3)
-  plot_des(ts, theta_vel_desires, 4)
+  #plot_des(ts, theta_desires, 3)
+  #plot_des(ts, theta_vel_desires, 4)
 
   pyplot.show()

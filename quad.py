@@ -10,8 +10,8 @@ class Quad2DModel:
     self.add_more = add_more
 
     if self.add_more:
-      pass
       #self.m *= 1.4
+      pass
 
   def deriv(self, x, u):
     x = State(x)
@@ -24,6 +24,8 @@ class Quad2DModel:
 
     if self.add_more:
       xdd -= 8.1 * x.x_vel
+      #xdd += 3.1 * x.x_vel ** 2
+
       #xdd += 4 * x.theta
       #tdd -= x.theta_vel
       #tdd -= x.x_vel

@@ -34,6 +34,9 @@ class FlatController:
     return v1.T.dot(A).dot(v2)
 
   def get_des_data(self, x_des, z_des=np.zeros(4)):
+    if self.learner is not None and self.learner.w is not None:
+      return self.get_des_data_corrected(x_des, z_des)
+
     a_des = np.array((x_des[2], z_des[2])) # Acceleration
     j_des = np.array((x_des[3], z_des[3])) # Jerk
     s_des = np.array((x_des[4], z_des[4])) # Snap
@@ -59,11 +62,24 @@ class FlatController:
     return a_norm, theta, theta_vel, theta_acc
 
   def get_des_data_corrected(self, x_des, z_des=np.zeros(4)):
+    v_des = np.array((x_des[1], z_des[1])) # Velocity
     a_des = np.array((x_des[2], z_des[2])) # Acceleration
     j_des = np.array((x_des[3], z_des[3])) # Jerk
     s_des = np.array((x_des[4], z_des[4])) # Snap
 
-    err = self.learner.predict(np.array((x_des[0], z_des[0], 0, x_des[1], z_des[1], 0))) / self.learner.dt
+    # TODO We omit angle and angel vel here because the learner doesn't use them... yet.
+    nom_state = np.array((x_des[0], z_des[0], 0, x_des[1], z_des[1], 0))
+
+    err = self.learner.predict(nom_state) / self.learner.dt
+
+    dfdx = self.learner.get_deriv_x(nom_state) / self.learner.dt
+    dfdx_vel = self.learner.get_deriv_x_vel(nom_state) / self.learner.dt
+
+    dfdx2 = self.learner.get_dderiv_x_x(nom_state) / self.learner.dt
+    dfdx_vel2 = self.learner.get_dderiv_x_vel_x_vel(nom_state) / self.learner.dt
+
+    dfdt = dfdx.dot(v_des) + dfdx_vel.dot(a_des)
+    d2fdt2 = dfdx2.dot(v_des).dot(v_des) + dfdx.dot(v_des) + dfdx_vel2.dot(a_des).dot(a_des) + dfdx_vel.dot(j_des)
 
     acc_vec = a_des + np.array((0, self.model.g)) - err
     z_body = acc_vec / np.linalg.norm(acc_vec)
@@ -71,15 +87,15 @@ class FlatController:
     theta = self.compute_theta(z_body)
 
     a_norm = np.linalg.norm(acc_vec)
-    a_norm_dot = j_des.dot(z_body)
+    a_norm_dot = (j_des - dfdt).dot(z_body)
 
-    z_body_dot = (j_des - a_norm_dot * z_body) / a_norm
+    z_body_dot = (j_des - a_norm_dot * z_body - dfdt) / a_norm
     # z_body_dot = theta_dot * cross_mat * z_body
     cross_mat = np.array(((0, -1), (1, 0)))
     theta_vel = self.solve_for_scalar(z_body_dot, cross_mat, z_body)
 
-    a_norm_ddot = s_des.dot(z_body) + j_des.dot(z_body_dot)
-    z_body_ddot = (s_des - a_norm_ddot * z_body - 2 * a_norm_dot * z_body_dot) / a_norm
+    a_norm_ddot = (s_des - d2fdt2).dot(z_body) + (j_des - dfdt).dot(z_body_dot)
+    z_body_ddot = (s_des - d2fdt2 - a_norm_ddot * z_body - 2 * a_norm_dot * z_body_dot) / a_norm
 
     theta_acc = z_body_ddot.T.dot(cross_mat).dot(z_body) + z_body_dot.T.dot(cross_mat).dot(z_body_dot)
 
@@ -101,11 +117,24 @@ class FlatController:
 
   def get_u(self, x, t):
     x_des, z_des = self.get_des(t)
+    a_norm, theta_des, theta_vel_des, theta_acc_des = self.get_des_data(x_des, z_des)
 
-    if self.learner is None or self.learner.w is None:
-      a_norm, theta_des, theta_vel_des, theta_acc_des = self.get_des_data(x_des, z_des)
-    else:
-      a_norm, theta_des, theta_vel_des, theta_acc_des = self.get_des_data_corrected(x_des, z_des)
+    #diff = self.learner.predict(np.array((x_des[0], 0, 0, x_des[1], 0, 0)), np.array((0, 0)))
+
+    ##xdot = np.array((x[3], x[4], x[5], x_des[2], 0, 0))
+    ##xddot = np.array((x_des[2], 0, 0, x_des[3], 0, 0))
+
+    #acc_corr = diff[0] / self.learner.dt
+    #jerk_corr = x_des[2] * self.learner.w[3, 0] / self.learner.dt# + \
+    #            #theta_vel_des * self.learner.w[3, 3] / self.learner.dt
+    #snap_corr = x_des[3] * self.learner.w[3, 0] / self.learner.dt# + \
+    #            #(tau / I) * self.learner.w[3, 3] / self.learner.dt
+
+    #x_des[2] -= acc_corr
+    #x_des[3] -= jerk_corr
+    #x_des[4] -= snap_corr
+
+    #return np.array(self._compute(x_des))
 
     F = self.model.m * a_norm
     tau = self.model.I * theta_acc_des

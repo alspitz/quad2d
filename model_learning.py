@@ -43,9 +43,10 @@ class LinearLearner:
   def compute(self):
     xs = np.array(self.xs)
     ys = np.array(self.ys)
-    self.w = np.linalg.pinv(xs).dot(ys)
-    #self.w, res, rank, s = np.linalg.lstsq(xs, ys)
 
+    self.w = np.linalg.pinv(xs).dot(ys)
+
+    #self.w, res, rank, s = np.linalg.lstsq(xs, ys)
     # TODO Figure out why the below hack is necessary.
     #self.w[np.abs(self.w) > 1] = 0
     #print(self.w)
@@ -53,6 +54,10 @@ class LinearLearner:
     #self.w = np.zeros((17, 6))
     #self.w[4, 3] = -4.1 * self.dt
     #self.w[3, 3] = 4 * self.dt
+
+    #self.w = np.zeros((9, 2))
+    #self.w[3, 0] = -8.1 * self.dt
+    #self.w[7, 0] = 3.1 * self.dt
 
     print("Fit is", np.linalg.norm(xs.dot(self.w) - ys) / xs.shape[0])
 
@@ -65,6 +70,46 @@ class LinearLearner:
 
   def predict(self, x_t, u_t=None):
     return self._get_x_in(x_t, u_t).dot(self.w)
+
+  def get_deriv_x(self, x_t, u_t=None):
+    x_t = State(x_t)
+    dzdx = np.array(((0, 0),
+                     (1, 0),
+                     (0, 1),
+                     (0, 0),
+                     (0, 0),
+                     (2 * x_t.x, 0),
+                     (0, 2 * x_t.z),
+                     (0, 0),
+                     (0, 0)))
+    return self.w.T.dot(dzdx)
+
+  def get_deriv_x_vel(self, x_t, u_t=None):
+    x_t = State(x_t)
+    dzdx_vel = np.array(((0, 0),
+                         (0, 0),
+                         (0, 0),
+                         (1, 0),
+                         (0, 1),
+                         (0, 0),
+                         (0, 0),
+                         (2 * x_t.x_vel, 0),
+                         (0, 2 * x_t.z_vel)))
+    return self.w.T.dot(dzdx_vel)
+
+  def get_dderiv_x_x(self, x_t):
+    # This derivative is a tensor of rank 3.
+    dx2 = np.zeros((9, 2, 2))
+    dx2[5, 0, 0] = 2
+    dx2[6, 1, 1] = 2
+    return np.tensordot(self.w.T, dx2, axes=1)
+
+  def get_dderiv_x_vel_x_vel(self, x_t):
+    # This derivative is a tensor of rank 3.
+    dx_vel2 = np.zeros((9, 2, 2))
+    dx_vel2[7, 0, 0] = 2
+    dx_vel2[8, 1, 1] = 2
+    return np.tensordot(self.w.T, dx_vel2, axes=1)
 
   def clear(self):
     self.xs = []
