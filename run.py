@@ -43,9 +43,9 @@ def error(x1, x2):
 if __name__ == "__main__":
   import matplotlib.pyplot as pyplot
 
-  trials = 4
+  trials = 2
 
-  m = 1.4
+  m = 4.19
   g = 10.18
   I = 0.123
 
@@ -59,9 +59,9 @@ if __name__ == "__main__":
   learner = LinearLearner(1, control_model, dt)
 
   x_poly = get_poly(x_start, x_vel_start)
-  z_poly = x_poly
+  #z_poly = x_poly
   #z_poly = [1, 1, -12, 0, 0]
-  #z_poly = [0, 0, 0, 0, 0]
+  z_poly = [0, 0, 0, 0, 0]
 
   controller = FlatController(control_model, x_poly, z_poly, learner)
   closed_loop = lambda t, x: quad.deriv(x, controller.get_u(x, t))

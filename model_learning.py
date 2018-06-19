@@ -13,15 +13,39 @@ class LinearLearner:
     self.w = None
 
   def _get_x_in(self, x_t, u_t):
-    self.xvel_input_ind = 4
     #base = np.hstack((x_t, u_t))
 
     x_t = State(x_t)
-    base = np.array((x_t.x, x_t.z, x_t.x_vel, x_t.z_vel))
-    return np.hstack((1, base, base**2))
+    u_t = Control(u_t)
+    #base = np.array((x_t.x, x_t.z, x_t.x_vel, x_t.z_vel))
+    return np.array((u_t.f * np.sin(x_t.theta), u_t.f * np.cos(x_t.theta)))
+    #return np.hstack((1, base, base**2))
     #return x_t
     #base = np.hstack((x_t))
     #return np.hstack((base))
+
+  def get_deriv_u(self, x_t, u_t):
+    x_t = State(x_t)
+    u_t = Control(u_t) * self.model.m
+    return self.w.T.dot(np.array((np.sin(x_t.theta), np.cos(x_t.theta))))
+
+  def get_deriv_theta(self, x_t, u_t):
+    x_t = State(x_t)
+    u_t = Control(u_t) * self.model.m
+    return self.w.T.dot(np.array((u_t.f * np.cos(x_t.theta), -u_t.f * np.sin(x_t.theta))))
+
+  def get_dderiv_u2(self, x_t, u_t):
+    return np.zeros(2)
+
+  def get_dderiv_utheta(self, x_t, u_t):
+    x_t = State(x_t)
+    u_t = Control(u_t) * self.model.m
+    return self.w.T.dot(np.array((np.cos(x_t.theta), -np.sin(x_t.theta))))
+
+  def get_dderiv_theta2(self, x_t, u_t):
+    x_t = State(x_t)
+    u_t = Control(u_t) * self.model.m
+    return self.w.T.dot(np.array((-u_t.f * np.sin(x_t.theta), -u_t.f * np.cos(x_t.theta))))
 
   def update(self, x_t, u_t, x_tp):
     xdot = self.model.deriv(x_t, u_t)
@@ -72,7 +96,7 @@ class LinearLearner:
     #pyplot.show()
 
   def predict(self, x_t, u_t=None):
-    return self._get_x_in(x_t, u_t).dot(self.w)
+    return self._get_x_in(x_t, u_t * self.model.m).dot(self.w)
 
   def get_deriv_x(self, x_t, u_t=None):
     x_t = State(x_t)
