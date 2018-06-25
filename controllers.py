@@ -34,18 +34,18 @@ class FlatController:
     """ A^{-1} = A^T """
     return v1.T.dot(A).dot(v2)
 
-  def compare_methods(self, u, theta, acc, jerk, snap):
+  def compare_methods(self, u, theta, pos, vel, acc, jerk, snap):
     z = np.array((-np.sin(theta), np.cos(theta)))
     zp = np.array((-np.cos(theta), -np.sin(theta)))
     zpp = np.array((np.sin(theta), -np.cos(theta)))
 
-    # Learner only uses theta and u for now...
-    x_t = np.array((0, 0, theta, 0, 0, 0))
+    # TODO Learner does not use theta vel and torque for now...
+    x_t = np.array((pos[0], pos[1], theta, vel[0], vel[1], 0))
     u_t = np.array((u, 0))
 
     #acc_factor = 1/1.4 - 1
     #fm = acc_factor * u * z
-    fm = self.learner.predict(x_t, u_t) / self.learner.dt
+    fm = self.learner.predict(x_t, u_t)
 
     #a = u * z - np.array((0, self.model.g)) + acc_factor * u * z - acc
     a = u * z - np.array((0, self.model.g)) + fm - acc
@@ -54,12 +54,19 @@ class FlatController:
     #dfm_du = acc_factor * z
     #dfm_dtheta = acc_factor * u * zp
 
-    dfm_du = self.learner.get_deriv_u(x_t, u_t) / self.learner.dt
-    dfm_dtheta = self.learner.get_deriv_theta(x_t, u_t) / self.learner.dt
+    dstate = np.hstack((vel, acc))
+    ddstate = np.hstack((acc, jerk))
+
+    dfm_du = self.learner.get_deriv_u(x_t, u_t)
+    dfm_dtheta = self.learner.get_deriv_theta(x_t, u_t)
+
+    dfm_dstate = self.learner.get_deriv_state(x_t, u_t)
 
     dfdx = np.column_stack((z, u * zp))
     dfdx += np.column_stack((dfm_du, dfm_dtheta))
+
     dfdt = -jerk
+    dfdt += dfm_dstate.dot(dstate)
 
     assert np.linalg.matrix_rank(dfdx) == 2
     xdot = np.linalg.solve(dfdx, -dfdt)
@@ -68,16 +75,24 @@ class FlatController:
     #d2fm_du2 = np.zeros(2)
     #d2fm_dtheta2 = acc_factor * u * zpp
 
-    d2fm_dudtheta = self.learner.get_dderiv_utheta(x_t, u_t) / self.learner.dt
-    d2fm_du2 = self.learner.get_dderiv_u2(x_t, u_t) / self.learner.dt
-    d2fm_dtheta2 = self.learner.get_dderiv_theta2(x_t, u_t) / self.learner.dt
+    d2fm_dudtheta = self.learner.get_dderiv_utheta(x_t, u_t)
+    d2fm_du2 = self.learner.get_dderiv_u2(x_t, u_t)
+    d2fm_dtheta2 = self.learner.get_dderiv_theta2(x_t, u_t)
 
-    d2fdx2 = np.array((
-      (((d2fm_du2[0],                       -np.cos(theta)     + d2fm_dudtheta[0]),
-        (-np.cos(theta) + d2fm_dudtheta[0],  u * np.sin(theta) + d2fm_dtheta2[0]))),
-       ((d2fm_du2[1],                       -np.sin(theta)     + d2fm_dudtheta[1]),
-        (-np.sin(theta) + d2fm_dudtheta[1], -u * np.cos(theta) + d2fm_dtheta2[1]))))
+    d2fm_dstate2 = self.learner.get_dderiv_state(x_t, u_t)
+
+    d2fm_dx2 = np.empty((2, 2, 2))
+    d2fm_dx2[:, 0, 0] = d2fm_du2
+    d2fm_dx2[:, 0, 1] = d2fm_dudtheta
+    d2fm_dx2[:, 1, 0] = d2fm_dudtheta
+    d2fm_dx2[:, 1, 1] = d2fm_dtheta2
+
+    d2fdx2 = np.array(((((0, -np.cos(theta)), (-np.cos(theta),  u*np.sin(theta)))),
+                        ((0, -np.sin(theta)), (-np.sin(theta), -u*np.cos(theta)))))
+    d2fdx2 += d2fm_dx2
+
     d2fdt2 = -snap
+    d2fdt2 += dfm_dstate.dot(ddstate) + np.tensordot(d2fm_dstate2, dstate, axes=1).dot(dstate)
 
     xddot = np.linalg.solve(dfdx, -d2fdt2 - np.tensordot(d2fdx2, xdot, axes=1).dot(xdot))
 
@@ -120,13 +135,13 @@ class FlatController:
     # TODO We omit angle and angle vel here because the learner doesn't use them... yet.
     nom_state = np.array((x_des[0], z_des[0], 0, x_des[1], z_des[1], 0))
 
-    err = self.learner.predict(nom_state) / self.learner.dt
+    err = self.learner.predict(nom_state)
 
-    dfdx = self.learner.get_deriv_x(nom_state) / self.learner.dt
-    dfdx_vel = self.learner.get_deriv_x_vel(nom_state) / self.learner.dt
+    dfdx = self.learner.get_deriv_x(nom_state)
+    dfdx_vel = self.learner.get_deriv_x_vel(nom_state)
 
-    dfdx2 = self.learner.get_dderiv_x_x(nom_state) / self.learner.dt
-    dfdx_vel2 = self.learner.get_dderiv_x_vel_x_vel(nom_state) / self.learner.dt
+    dfdx2 = self.learner.get_dderiv_x_x(nom_state)
+    dfdx_vel2 = self.learner.get_dderiv_x_vel_x_vel(nom_state)
 
     dfdt = dfdx.dot(v_des) + dfdx_vel.dot(a_des)
     d2fdt2 = dfdx2.dot(v_des).dot(v_des) + dfdx.dot(a_des) + dfdx_vel2.dot(a_des).dot(a_des) + dfdx_vel.dot(j_des)
@@ -152,6 +167,7 @@ class FlatController:
     return a_norm, theta, theta_vel, theta_acc
 
   def get_des_data_corrected2(self, x_des, z_des=np.zeros(4)):
+    p_des = np.array((x_des[0], z_des[0])) # Position
     v_des = np.array((x_des[1], z_des[1])) # Velocity
     a_des = np.array((x_des[2], z_des[2])) # Acceleration
     j_des = np.array((x_des[3], z_des[3])) # Jerk
@@ -160,13 +176,13 @@ class FlatController:
     # TODO We omit angle and angle vel here because the learner doesn't use them... yet.
     #nom_state = np.array((x_des[0], z_des[0], 0, x_des[1], z_des[1], 0))
 
-    #err = self.learner.predict(nom_state) / self.learner.dt
+    #err = self.learner.predict(nom_state)
 
-    #dfdx = self.learner.get_deriv_x(nom_state) / self.learner.dt
-    #dfdx_vel = self.learner.get_deriv_x_vel(nom_state) / self.learner.dt
+    #dfdx = self.learner.get_deriv_x(nom_state)
+    #dfdx_vel = self.learner.get_deriv_x_vel(nom_state)
 
-    #dfdx2 = self.learner.get_dderiv_x_x(nom_state) / self.learner.dt
-    #dfdx_vel2 = self.learner.get_dderiv_x_vel_x_vel(nom_state) / self.learner.dt
+    #dfdx2 = self.learner.get_dderiv_x_x(nom_state)
+    #dfdx_vel2 = self.learner.get_dderiv_x_vel_x_vel(nom_state)
 
     #dfdt = dfdx.dot(v_des) + dfdx_vel.dot(a_des)
     #d2fdt2 = dfdx2.dot(v_des).dot(v_des) + dfdx.dot(a_des) + dfdx_vel2.dot(a_des).dot(a_des) + dfdx_vel.dot(j_des)
@@ -182,19 +198,22 @@ class FlatController:
     def opt_f(x):
       u, theta = x
 
-      x_t = np.array((0, 0, theta, 0, 0, 0))
+      x_t = np.array((p_des[0], p_des[1], theta, v_des[0], v_des[1], 0))
       u_t = np.array((u, 0))
-      fm = self.learner.predict(x_t, u_t) / self.learner.dt
+      fm = self.learner.predict(x_t, u_t)
 
       return u * np.array((-np.sin(theta), np.cos(theta))) - np.array((0, self.model.g)) + fm - a_des
 
     sol = scipy.optimize.root(opt_f, np.array((a_norm, theta)))
-
-    a_norm, theta = sol.x
-
     if not sol.success:
       print("Root finding failed!")
       input()
+
+    a_norm, theta = sol.x
+    # TODO Handle this in the optimziation?
+    theta %= 2 * np.pi
+    if theta > np.pi:
+      theta -= 2 * np.pi
 
     ##a_norm = np.linalg.norm(acc_vec) / mass_factor
     #a_norm_dot = (j_des).dot(z_body)
@@ -209,7 +228,7 @@ class FlatController:
 
     #theta_acc = z_body_ddot.T.dot(cross_mat).dot(z_body) + z_body_dot.T.dot(cross_mat).dot(z_body_dot)
 
-    theta_vel, theta_acc = self.compare_methods(a_norm, theta, a_des, j_des, s_des)
+    theta_vel, theta_acc = self.compare_methods(a_norm, theta, p_des, v_des, a_des, j_des, s_des)
 
     return a_norm, theta, theta_vel, theta_acc
 
