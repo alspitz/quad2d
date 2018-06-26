@@ -29,7 +29,7 @@ class Quad2DModel:
       #xdd -= 3.1 * x.x_vel ** 2
       #xdd -= 0.8 * x.x ** 2
 
-      #zdd -= 10.5 * x.z_vel
+      zdd -= 10.5 * x.z_vel
 
       xdd += 1.4 * np.sin(x.theta)
       #tdd -= x.theta_vel

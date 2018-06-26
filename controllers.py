@@ -27,6 +27,8 @@ class FlatController:
 
     self.pd = PD(10, 10)
 
+    self.solved_once = False
+
   def compute_theta(self, z_body):
     return np.arcsin(-z_body[0])
 
@@ -195,6 +197,11 @@ class FlatController:
     z_body = acc_vec / np.linalg.norm(acc_vec)
     theta = self.compute_theta(z_body)
 
+    if not self.solved_once:
+      initial_guess = np.array((a_norm, theta))
+    else:
+      initial_guess = self.last_solution
+
     def opt_f(x):
       u, theta = x
 
@@ -204,12 +211,16 @@ class FlatController:
 
       return u * np.array((-np.sin(theta), np.cos(theta))) - np.array((0, self.model.g)) + fm - a_des
 
-    sol = scipy.optimize.root(opt_f, np.array((a_norm, theta)))
+    sol = scipy.optimize.root(opt_f, initial_guess)
     if not sol.success:
       print("Root finding failed!")
       input()
 
+    self.solved_once = True
+    self.last_solution = sol.x
+
     a_norm, theta = sol.x
+    #print(a_norm, theta)
     # TODO Handle this in the optimziation?
     theta %= 2 * np.pi
     if theta > np.pi:

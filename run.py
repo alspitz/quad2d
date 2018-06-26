@@ -50,6 +50,8 @@ if __name__ == "__main__":
   I = 0.123
 
   x_start = 0
+  # Be careful with this non zero
+  # With disturbances may require a non zero theta or omega.
   x_vel_start = 0
 
   quad = Quad2DModel(m, g, I, add_more=True)
@@ -59,9 +61,10 @@ if __name__ == "__main__":
   learner = LinearLearner(1, control_model, dt)
 
   x_poly = get_poly(x_start, x_vel_start)
-  #z_poly = x_poly
+  z_poly = x_poly
+  #z_poly = [0, 1, 1, 0, 0]
   #z_poly = [1, 1, -12, 0, 0]
-  z_poly = [0, 0, 0, 0, 0]
+  #z_poly = [0, 0, 0, 0, 0]
 
   controller = FlatController(control_model, x_poly, z_poly, learner)
   closed_loop = lambda t, x: quad.deriv(x, controller.get_u(x, t))

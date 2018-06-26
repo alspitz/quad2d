@@ -80,6 +80,10 @@ class LinearLearner:
     ys = np.array(self.ys)
 
     self.w = np.linalg.pinv(xs).dot(ys)
+    #self.w = np.zeros((7, 2))
+    #self.w[0, 0] = -10.1
+    #self.w[2, 0] = -8.1
+    #self.w[4, 0] = 1.4
 
     #self.w, res, rank, s = np.linalg.lstsq(xs, ys)
     # TODO Figure out why the below hack is necessary.
