@@ -1,4 +1,6 @@
-import numpy as np
+#import numpy as np
+import autograd
+import autograd.numpy as np
 import scipy.stats
 
 from quad import Control, State
@@ -12,55 +14,128 @@ class LinearLearner:
     self.ys = []
     self.w = None
 
+    #self.get_dzdxu_f = autograd.elementwise_grad(self._get_x_in)
+    self.get_dzdxu_f = autograd.jacobian(self.get_features_from_state_input)
+
+    self.get_d2 = autograd.jacobian(self.get_dzdxu_f)
+
+    self.D = 1080 # No. of random fourier features.
+    self.omegas = np.random.normal(loc=0.0, scale=0.01, size=(self.D, 6))
+    self.offsets = np.random.uniform(low=0.0, high=2 * np.pi, size=(self.D,))
+
+  def get_features_from_state_input(self, state_input):
+    return np.array((state_input[0], state_input[1], state_input[2], state_input[3],
+                     np.sin(state_input[5]),
+                     state_input[4] * np.sin(state_input[5]),
+                     state_input[4] * np.cos(state_input[5])))
+    #ff = np.sqrt(2.0 / self.D) * np.cos(np.dot(self.omegas, state_input) + self.offsets)
+    #return np.concatenate((state_input, ff))
+
   def _get_x_in(self, x_t, u_t):
+    state_input = np.array((x_t[0], x_t[1], x_t[3], x_t[4], u_t[0], x_t[2]))
+    return self.get_features_from_state_input(state_input)
     #base = np.hstack((x_t, u_t))
 
-    x_t = State(x_t)
-    u_t = Control(u_t)
-    #base = np.array((x_t.x, x_t.z, x_t.x_vel, x_t.z_vel))
-    return np.array((x_t.x, x_t.z, x_t.x_vel, x_t.z_vel, np.sin(x_t.theta), u_t.f * np.sin(x_t.theta), u_t.f * np.cos(x_t.theta)))
+    #x_t = State(x_t)
+    #u_t = Control(u_t)
+    ##base = np.array((x_t.x, x_t.z, x_t.x_vel, x_t.z_vel))
+    #return np.array((x_t.x, x_t.z, x_t.x_vel, x_t.z_vel, np.sin(x_t.theta), u_t.f * np.sin(x_t.theta), u_t.f * np.cos(x_t.theta)))
+    #return np.array((x_t[0], x_t[1], x_t[3], x_t[4], np.sin(x_t[2]), u_t[0] * np.sin(x_t[2]), u_t[0] * np.cos(x_t[2])))
     #return np.hstack((1, base, base**2))
     #return x_t
     #base = np.hstack((x_t))
     #return np.hstack((base))
 
-  def get_deriv_state(self, x_t, u_t):
-    # State is (x, z, x dot, z dot)
-    dzdstate = np.array(((1, 0, 0, 0),
-                         (0, 1, 0, 0),
-                         (0, 0, 1, 0),
-                         (0, 0, 0, 1),
-                         (0, 0, 0, 0),
-                         (0, 0, 0, 0),
-                         (0, 0, 0, 0)))
-    return self.w.T.dot(dzdstate)
+  def get_derivs_state_input(self, state_input):
+    state_input[4] *= self.model.m
 
-  def get_dderiv_state(self, x_t, u_t):
-    # State is (x, z, x dot, z dot)
-    return np.zeros((2, 4, 4))
+    dzdsi = np.zeros((len(self.w), 6))
+    dzdsi[:4, :4] = np.eye(4)
 
-  def get_deriv_u(self, x_t, u_t):
-    x_t = State(x_t)
-    u_t = Control(u_t) * self.model.m
-    return self.w.T.dot(np.array((0, 0, 0, 0, 0, np.sin(x_t.theta), np.cos(x_t.theta))))
+    # sin(theta)
+    dzdsi[4, 5] = np.cos(state_input[5])
 
-  def get_deriv_theta(self, x_t, u_t):
-    x_t = State(x_t)
-    u_t = Control(u_t) * self.model.m
-    return self.w.T.dot(np.array((0, 0, 0, 0, np.cos(x_t.theta), u_t.f * np.cos(x_t.theta), -u_t.f * np.sin(x_t.theta))))
+    # u sin(theta)
+    dzdsi[5, 4] = np.sin(state_input[5])
+    dzdsi[5, 5] = state_input[4] * np.cos(state_input[5])
 
-  def get_dderiv_u2(self, x_t, u_t):
-    return np.zeros(2)
+    # u cos(theta)
+    dzdsi[6, 4] = np.cos(state_input[5]) # u cos(theta)
+    dzdsi[6, 5] = -state_input[4] * np.sin(state_input[5])
 
-  def get_dderiv_utheta(self, x_t, u_t):
-    x_t = State(x_t)
-    u_t = Control(u_t) * self.model.m
-    return self.w.T.dot(np.array((0, 0, 0, 0, 0, np.cos(x_t.theta), -np.sin(x_t.theta))))
+    #dzdstate_input_auto = self.get_dzdxu_f(state_input)
+    #dzdstate_input_man = -np.sqrt(2.0 / self.D) * np.einsum("i,ij->ij", np.sin(np.dot(self.omegas, state_input) + self.offsets), self.omegas)
+    #dzdstate_input_man = np.concatenate((np.eye(len(state_input)), dzdstate_input_man))
 
-  def get_dderiv_theta2(self, x_t, u_t):
-    x_t = State(x_t)
-    u_t = Control(u_t) * self.model.m
-    return self.w.T.dot(np.array((0, 0, 0, 0, -np.sin(x_t.theta), -u_t.f * np.sin(x_t.theta), -u_t.f * np.cos(x_t.theta))))
+    dzdstate_input = dzdsi
+
+    full_deriv = self.w.T.dot(dzdstate_input)
+    return full_deriv[:, :4], full_deriv[:, 4:]
+
+  def get_dderiv_state_input(self, state_input):
+    state_input[4] *= self.model.m
+
+    #d2zdstate_input2_auto = self.get_d2(state_input)
+
+    #part1 = -np.sqrt(2.0 / self.D) * np.expand_dims(np.cos(np.dot(self.omegas, state_input) + self.offsets), axis=1) * self.omegas
+    #d2zdstate_input2_man = np.einsum("ij,ik->ijk", part1, self.omegas)
+    #d2zdstate_input2_man = np.concatenate((np.zeros((6, 6, 6)), d2zdstate_input2_man))
+
+    #print(d2zdstate_input2_auto)
+    #print(d2zdstate_input2_auto.shape)
+    #print(d2zdstate_input2_man)
+    #print(d2zdstate_input2_man.shape)
+    #input()
+    #assert np.allclose(d2zdstate_input2_auto, d2zdstate_input2_man)
+
+    d2zdsi2 = np.zeros((len(self.w), 6, 6))
+    d2zdsi2[4, 5, 5] = -np.sin(state_input[5])
+    d2zdsi2[5, 4, 5] =  np.cos(state_input[5])
+    d2zdsi2[5, 5, 4] =  np.cos(state_input[5])
+    d2zdsi2[5, 5, 5] = -state_input[4] * np.sin(state_input[5])
+    d2zdsi2[6, 4, 5] = -np.sin(state_input[5])
+    d2zdsi2[6, 5, 4] = -np.sin(state_input[5])
+    d2zdsi2[6, 5, 5] = -state_input[4] * np.cos(state_input[5])
+
+    d2zdstate_input2 = d2zdsi2
+
+    full_dderiv = np.tensordot(self.w.T, d2zdstate_input2, axes=1)
+    return full_dderiv
+
+  #def get_deriv_state(self, x_t, u_t):
+  #  # State is (x, z, x dot, z dot)
+  #  dzdstate = np.array(((1, 0, 0, 0),
+  #                       (0, 1, 0, 0),
+  #                       (0, 0, 1, 0),
+  #                       (0, 0, 0, 1),
+  #                       (0, 0, 0, 0),
+  #                       (0, 0, 0, 0),
+  #                       (0, 0, 0, 0)))
+  #  return self.w.T.dot(dzdstate)
+
+
+  #def get_deriv_u(self, x_t, u_t):
+  #  x_t = State(x_t)
+  #  u_t = Control(u_t) * self.model.m
+  #  return self.w.T.dot(np.array((0, 0, 0, 0, 0, np.sin(x_t.theta), np.cos(x_t.theta))))
+
+  #def get_deriv_theta(self, x_t, u_t):
+  #  x_t = State(x_t)
+  #  u_t = Control(u_t) * self.model.m
+  #  return self.w.T.dot(np.array((0, 0, 0, 0, np.cos(x_t.theta), u_t.f * np.cos(x_t.theta), -u_t.f * np.sin(x_t.theta))))
+
+  #def get_dderiv_u2(self, x_t, u_t):
+  #  return np.zeros(2)
+
+  #def get_dderiv_utheta(self, x_t, u_t):
+  #  x_t = State(x_t)
+  #  u_t = Control(u_t) * self.model.m
+  #  return self.w.T.dot(np.array((0, 0, 0, 0, 0, np.cos(x_t.theta), -np.sin(x_t.theta))))
+
+  #def get_dderiv_theta2(self, x_t, u_t):
+  #  x_t = State(x_t)
+  #  u_t = Control(u_t) * self.model.m
+  #  return self.w.T.dot(np.array((0, 0, 0, 0, -np.sin(x_t.theta), -u_t.f * np.sin(x_t.theta), -u_t.f * np.cos(x_t.theta))))
 
   def update(self, x_t, u_t, x_tp):
     xdot = self.model.deriv(x_t, u_t)
@@ -79,7 +154,8 @@ class LinearLearner:
     xs = np.array(self.xs)
     ys = np.array(self.ys)
 
-    self.w = np.linalg.pinv(xs).dot(ys)
+    #self.w = np.linalg.pinv(xs).dot(ys)
+    self.w = np.linalg.pinv(xs.T.dot(xs) + 0.2 * np.eye(xs.shape[1])).dot(xs.T.dot(ys))
     #self.w = np.zeros((7, 2))
     #self.w[0, 0] = -10.1
     #self.w[2, 0] = -8.1

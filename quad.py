@@ -1,4 +1,5 @@
-import numpy as np
+#import numpy as np
+import autograd.numpy as np
 
 # TODO Use automatic differentiation for everything.
 
@@ -24,14 +25,14 @@ class Quad2DModel:
 
     if self.add_more:
       pass
-      xdd -= 10.1 * x.x
-      xdd -= 8.1 * x.x_vel
+      xdd -= 1.1 * x.x
+      xdd -= 2.1 * x.x_vel
       #xdd -= 3.1 * x.x_vel ** 2
       #xdd -= 0.8 * x.x ** 2
 
-      zdd -= 10.5 * x.z_vel
+      zdd -= 1.5 * x.z_vel
 
-      xdd += 1.4 * np.sin(x.theta)
+      #xdd += 1.4 * np.sin(x.theta)
       #tdd -= x.theta_vel
       #tdd -= x.x_vel
 

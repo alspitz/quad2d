@@ -1,4 +1,5 @@
-import numpy as np
+#import numpy as np
+import autograd.numpy as np
 import scipy.integrate
 
 from controllers import FlatController
@@ -43,7 +44,13 @@ def error(x1, x2):
 if __name__ == "__main__":
   import matplotlib.pyplot as pyplot
 
-  trials = 2
+  trials = 5
+
+  feedforward = True
+  deriv_correct = True
+  feedback = True
+
+  disturbances = True
 
   m = 4.19
   g = 10.18
@@ -54,7 +61,7 @@ if __name__ == "__main__":
   # With disturbances may require a non zero theta or omega.
   x_vel_start = 0
 
-  quad = Quad2DModel(m, g, I, add_more=True)
+  quad = Quad2DModel(m, g, I, add_more=disturbances)
   control_model = Quad2DModel(m, g, I)
 
   dt = 0.001
@@ -66,11 +73,12 @@ if __name__ == "__main__":
   #z_poly = [1, 1, -12, 0, 0]
   #z_poly = [0, 0, 0, 0, 0]
 
-  controller = FlatController(control_model, x_poly, z_poly, learner)
+  controller = FlatController(control_model, x_poly, z_poly, learner, feedforward, deriv_correct, feedback)
   closed_loop = lambda t, x: quad.deriv(x, controller.get_u(x, t))
 
   t_end = 1.0
-  ts = np.linspace(0, t_end, 1001)
+  N = int(1 / dt) + 1
+  ts = np.linspace(0, t_end, N)
   x_des, z_des = np.array(controller.get_des(ts))
 
   z_start = z_des[0, 0]
@@ -87,10 +95,26 @@ if __name__ == "__main__":
     theta_desires = []
     theta_vel_desires = []
 
+    print_step = 0.0
+    print_freq = 0.01
+
+    print("Computing controls without integrating...")
     for i in range(x_des.shape[1]):
-      a_norm, theta_des, theta_vel_des, theta_acc_des = controller.get_des_data(x_des[:, i], z_des[:, i])
+      a_norm, theta_des, theta_vel_des, theta_acc_des = controller.get_des_data(x_des[:, i], z_des[:, i], np.zeros(2))
       theta_desires.append(theta_des)
       theta_vel_desires.append(theta_vel_des)
+
+    print("Starting integration...")
+    #while ts[-1] < t_end:
+    #  new_x = xs[-1] + closed_loop(ts[-1], xs[-1]) * dt
+    #  learner.update(xs[-1], controller.get_u(xs[-1], ts[-1]), new_x)
+
+    #  if ts[-1] >= print_step:
+    #    print("%0.2f / %0.2f\r" % (print_step, t_end), end="")
+    #    print_step += print_freq
+
+    #  xs.append(new_x)
+    #  ts.append(ts[-1] + dt)
 
     while r.successful() and r.t < t_end:
       t_now = r.t + dt
@@ -98,8 +122,14 @@ if __name__ == "__main__":
 
       learner.update(xs[-1], controller.get_u(xs[-1], r.t - dt), x)
 
+      if r.t >= print_step:
+        curr_error = error(np.array(xs)[:, 0], x_des[0, :len(xs)])
+        print("%0.2f / %0.2f (x error is %1.2e)\r" % (print_step, t_end, curr_error), end="")
+        print_step += print_freq
+
       xs.append(x)
       ts.append(t_now)
+    print()
 
     learner.compute()
     #learner.clear()
