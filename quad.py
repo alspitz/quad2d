@@ -3,16 +3,47 @@ import autograd.numpy as np
 
 # TODO Use automatic differentiation for everything.
 
+D_X_CONSTANT = 0
+D_X_DRAG = 1
+D_ANGLE = 2
+D_Z_DRAG = 3
+D_MASS = 4
+
 class Quad2DModel:
-  def __init__(self, m, g, I, add_more=False):
+  def __init__(self, m, g, I, disturbances=None):
+    if disturbances is None:
+      disturbances = [False] * 5
+
     self.m = m
     self.g = g
     self.I = I
-    self.add_more = add_more
+    self.disturbances = disturbances
 
-    if self.add_more:
+    if self.disturbances[D_MASS]:
       self.m += 2
-      pass
+
+  def get_disturbance(self, x, u):
+    x = State(x)
+    u = Control(u)
+
+    accel_dist = np.zeros(2)
+
+    if self.disturbances[D_X_CONSTANT]:
+      accel_dist[0] -= 4.1
+    if self.disturbances[D_X_DRAG]:
+      accel_dist[0] -= 3.1 * x.x_vel
+    if self.disturbances[D_Z_DRAG]:
+      accel_dist[1] -= 3.1 * x.z_vel
+    if self.disturbances[D_ANGLE]:
+      accel_dist[0] += 1.4 * np.sin(x.theta)
+
+    #xdd -= 4.1 * x.x
+    #xdd -= 3.1 * x.x_vel ** 2
+    #xdd -= 0.8 * x.x ** 2
+    #tdd -= x.theta_vel
+    #tdd -= x.x_vel
+
+    return accel_dist
 
   def deriv(self, x, u):
     x = State(x)
@@ -23,20 +54,11 @@ class Quad2DModel:
     zdd =  accel * np.cos(x.theta) - self.g
     tdd = u.tau / self.I
 
-    if self.add_more:
-      pass
-      xdd -= 1.1 * x.x
-      xdd -= 2.1 * x.x_vel
-      #xdd -= 3.1 * x.x_vel ** 2
-      #xdd -= 0.8 * x.x ** 2
+    accel_vec = np.array((xdd, zdd))
 
-      zdd -= 1.5 * x.z_vel
+    accel_vec += self.get_disturbance(x, u)
 
-      #xdd += 1.4 * np.sin(x.theta)
-      #tdd -= x.theta_vel
-      #tdd -= x.x_vel
-
-    return np.array((x.x_vel, x.z_vel, x.theta_vel, xdd, zdd, tdd))
+    return np.array((x.x_vel, x.z_vel, x.theta_vel, accel_vec[0], accel_vec[1], tdd))
 
   def dderiv(self, x, xdot, u):
     x = State(x)
